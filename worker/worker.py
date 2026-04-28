@@ -46,13 +46,15 @@ class JSONFormatter(logging.Formatter):
 
 def setup_logger():
     logger = logging.getLogger("worker")
-    handler = logging.StreamHandler()
+    
+    handler = logging.StreamHandler(sys.stdout) 
+    
     handler.setFormatter(JSONFormatter())
     
     log_level = os.getenv("LOG_LEVEL", "info").upper()
     logger.setLevel(getattr(logging, log_level, logging.INFO))
     
-    # ป้องกัน Handler ซ้ำซ้อนเวลามีการเรียก setup_logger หลายครั้ง
+
     if not logger.handlers:
         logger.addHandler(handler)
         
@@ -99,7 +101,6 @@ def main():
     consecutive_failures = 0
     
     while True:
-        print(">>> LOOP RUNNING <<<", flush=True)
         try:
             logger.info({
                 "event": "worker_heartbeat",

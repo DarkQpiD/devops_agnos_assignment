@@ -24,7 +24,8 @@ RUN useradd -m -u 1000 appuser
 USER appuser
 
 # Default env vars (overridden per environment)
-ENV ENV=production \
+ENV PYTHONUNBUFFERED=1 \
+    ENV ENV=production \
     LOG_LEVEL=warning \
     WORKER_INTERVAL=300 \
     WORKER_MAX_FAILURES=5
