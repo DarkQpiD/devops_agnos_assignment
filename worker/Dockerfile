@@ -25,7 +25,7 @@ USER appuser
 
 # Default env vars (overridden per environment)
 ENV PYTHONUNBUFFERED=1 \
-    ENV ENV=production \
+    ENV=production \
     LOG_LEVEL=warning \
     WORKER_INTERVAL=300 \
     WORKER_MAX_FAILURES=5
