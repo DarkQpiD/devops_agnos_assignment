@@ -17,3 +17,5 @@ data:
   ENV: "uat"
   WORKER_INTERVAL: "120"
   WORKER_MAX_FAILURES: "5"
+  LOG_LEVEL: "info"        
+  PYTHONUNBUFFERED: "1"

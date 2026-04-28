@@ -17,3 +17,5 @@ data:
   ENV: "dev"
   WORKER_INTERVAL: "60"
   WORKER_MAX_FAILURES: "5"
+  LOG_LEVEL: "debug"
+  PYTHONUNBUFFERED: "1"

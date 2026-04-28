@@ -17,3 +17,5 @@ data:
   ENV: "prod"
   WORKER_INTERVAL: "300"
   WORKER_MAX_FAILURES: "3"
+  LOG_LEVEL: "warning" 
+  PYTHONUNBUFFERED: "1"
