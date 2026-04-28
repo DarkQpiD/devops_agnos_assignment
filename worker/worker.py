@@ -1,3 +1,4 @@
+import sys
 import logging
 import json
 import os
@@ -128,7 +129,6 @@ def main():
         time.sleep(interval)
 
 if __name__ == "__main__":
-    import sys
     print(">>> worker.py STARTED <<<", flush=True)
     sys.stdout.flush()
 
