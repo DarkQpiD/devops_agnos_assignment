@@ -99,7 +99,13 @@ def main():
     consecutive_failures = 0
     
     while True:
+        print(">>> LOOP RUNNING <<<", flush=True)
         try:
+            logger.info({
+                "event": "worker_heartbeat",
+                "message": "Worker loop is running"
+            })
+
             update_timestamp()
             consecutive_failures = 0
         except Exception as e:
@@ -121,4 +127,8 @@ def main():
         time.sleep(interval)
 
 if __name__ == "__main__":
+    import sys
+    print(">>> worker.py STARTED <<<", flush=True)
+    sys.stdout.flush()
+
     main()
