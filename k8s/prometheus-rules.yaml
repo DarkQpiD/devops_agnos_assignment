@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/monitoring.coreos.com/prometheusrule_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: agnos-alerts
+  namespace: monitor 
+  labels:
+    release: prometheus 
+spec:
+  groups:
+  - name: agnos.rules
+    rules:
+ 
+    - alert: HighErrorRate
+      expr: sum(rate(http_request_duration_seconds_count{status=~"5.."}[5m])) / sum(rate(http_request_duration_seconds_count[5m])) > 0.05
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "API High Error Rate detected"
+        description: "The API has been experiencing over 5% 5xx error rate over the past 2 minutes."
+
+    - alert: WorkerStalled
+      expr: time() - worker_last_success_unixtime > 300
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Worker Service is stalled"
+        description: "No successful job updates have been received from the worker for more than 5 minutes, indicating a possible system hang."
+
+    - alert: ApiDown
+      expr: absent(up{app="api"} == 1)
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "API Service is DOWN"
+        description: "No active API pods are currently running in the system."
