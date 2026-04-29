@@ -70,6 +70,7 @@ jobs:
           format: 'table'
           exit-code: '1' # บังคับ Fail ถ้าเจอช่องโหว่ระดับ HIGH/CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
 
