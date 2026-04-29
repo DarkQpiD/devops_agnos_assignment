@@ -5,23 +5,22 @@ import os
 import time
 from datetime import datetime, timezone
 
+# ✅ นำเข้าไลบรารีสำหรับ Prometheus Metrics
+from prometheus_client import start_http_server, Counter, Gauge
+
+# ─── Metrics ──────────────────────────────────────────────────────────────────
+# สร้างตัวแปรเก็บสถิติเพื่อส่งให้ Prometheus
+JOBS_COMPLETED = Counter('worker_jobs_completed_total', 'Total number of successful jobs')
+LAST_SUCCESS_TIMESTAMP = Gauge('worker_last_success_unixtime', 'Last time a job was successful')
+
 # ─── Load Environment Variables ─────────────────────────────────────────────────
 try:
     from dotenv import load_dotenv
-    
-    # 1. เช็คก่อนว่ารันอยู่ในโหมดไหน (ถ้าไม่ได้เซ็ตค่ามา ให้มองว่าเป็น development)
     current_env = os.getenv("ENV", "development").lower()
-    
-    # 2. โหลดไฟล์ .env พื้นฐานก่อน (ถ้ามี)
-    # load_dotenv(".env")
-    
-    # 3. โหลดไฟล์ .env ตามสภาพแวดล้อม (ทับค่าเดิมถ้ามีตัวแปรซ้ำกัน)
     env_filename = f".env.{current_env}"
     load_dotenv(env_filename, override=True)
-    
     print(f"[*] Loaded environment from: {env_filename}")
 except ImportError:
-    # ถ้าไม่ได้ลง python-dotenv (เช่น รันบน K8s ที่ inject env มาให้แล้ว) ก็ให้ผ่านไป
     pass
 
 # ─── Structured JSON Logger ───────────────────────────────────────────────────
@@ -33,8 +32,6 @@ class JSONFormatter(logging.Formatter):
             "service": "worker-service",
             "env": os.getenv("ENV", "development"),
         }
-        
-        # ถ้าโยน Dict เข้ามาใน logger ให้เอามา Merge รวมกันเลย
         if isinstance(record.msg, dict):
             log_record.update(record.msg)
         else:
@@ -47,18 +44,13 @@ class JSONFormatter(logging.Formatter):
 
 def setup_logger():
     logger = logging.getLogger("worker")
-    
     handler = logging.StreamHandler(sys.stdout) 
-    
     handler.setFormatter(JSONFormatter())
-    
     log_level = os.getenv("LOG_LEVEL", "info").upper()
     logger.setLevel(getattr(logging, log_level, logging.INFO))
     
-
     if not logger.handlers:
         logger.addHandler(handler)
-        
     return logger
 
 logger = setup_logger()
@@ -77,7 +69,6 @@ def get_env_message() -> str:
 # ─── Worker Job ───────────────────────────────────────────────────────────────
 def update_timestamp():
     now = datetime.now(timezone.utc)
-    # โยนเป็น Dict เข้าไปเลย ไม่ต้อง json.dumps แล้ว
     logger.info({
         "event": "timestamp_updated",
         "date": now.date().isoformat(),
@@ -87,7 +78,6 @@ def update_timestamp():
 
 # ─── Main Loop ────────────────────────────────────────────────────────────────
 def main():
-    # ใช้ or เผื่อกรณีเซ็ต Env ไว้เป็นค่าว่าง ("") จะได้ไม่ Error
     interval = int(os.getenv("WORKER_INTERVAL", "") or 30)
     max_failures = int(os.getenv("WORKER_MAX_FAILURES", "") or 5)
     env = os.getenv("ENV", "development")
@@ -99,6 +89,10 @@ def main():
         "worker_message": get_env_message(),
     })
     
+    # ✅ เปิด HTTP Server ที่พอร์ต 8001 เพื่อให้ Prometheus เข้ามาดึง Metrics
+    start_http_server(8001)
+    logger.info({"event": "metrics_server_started", "port": 8001})
+    
     consecutive_failures = 0
     
     while True:
@@ -109,7 +103,17 @@ def main():
             })
 
             update_timestamp()
+            
+            # ✅ เมื่อทำงานสำเร็จ ให้อัปเดต Metrics
+            JOBS_COMPLETED.inc()
+            LAST_SUCCESS_TIMESTAMP.set_to_current_time()
+            
             consecutive_failures = 0
+            
+            # ✅ สร้าง Heartbeat File ให้ Kubernetes Liveness Probe เข้ามาเช็ค
+            with open("/tmp/healthy", "w") as f:
+                f.write("ok")
+                
         except Exception as e:
             consecutive_failures += 1
             logger.error({
@@ -117,6 +121,10 @@ def main():
                 "error": str(e),
                 "consecutive_failures": consecutive_failures,
             })
+            
+            # ✅ ถ้าเกิด Error ลบ Heartbeat File ทิ้ง เพื่อบอก K8s ว่าเรามีปัญหาแล้วนะ
+            if os.path.exists("/tmp/healthy"):
+                os.remove("/tmp/healthy")
             
             # ถ้า fail ติดกันเกิน max → crash ให้ k8s restart
             if consecutive_failures >= max_failures:
@@ -131,5 +139,4 @@ def main():
 if __name__ == "__main__":
     print(">>> worker.py STARTED <<<", flush=True)
     sys.stdout.flush()
-
     main()
