@@ -1,0 +1,151 @@
+name: Agnos CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ] # ทริกเกอร์อัตโนมัติเมื่อพุชเข้า main (เป้าหมายคือ DEV)
+  workflow_dispatch:     # ทริกเกอร์แบบ Manual (เป้าหมายคือ UAT หรือ PROD)
+    inputs:
+      target_env:
+        description: 'Environment to deploy'
+        required: true
+        default: 'uat'
+        type: choice
+        options:
+          - uat
+          - prod
+
+env:
+  REGISTRY: ghcr.io
+  # เปลี่ยน 'darkqpid' เป็นชื่อ GitHub username ของคุณถ้าจำเป็น
+  IMAGE_API: ghcr.io/darkqpid/devops_agnos_assignment_api
+  IMAGE_WORKER: ghcr.io/darkqpid/devops_agnos_assignment_worker
+
+jobs:
+  # ─── STAGE 1: Lint & Code Quality ──────────────────────────────────────────
+  lint:
+    name: Lint Code (Flake8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install flake8
+        run: pip install flake8
+      - name: Run flake8
+        # สแกนหา Syntax error ง่ายๆ ถ้าเจอ Pipeline จะหยุดทันที
+        run: flake8 api/ worker/ --count --select=E9,F63,F7,F82 --show-source --statistics
+
+  # ─── STAGE 2 & 3: Build & Security Scan ────────────────────────────────────
+  build-and-scan:
+    name: Build, Scan (Trivy), and Push
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- ฝั่ง API ---
+      - name: Build API Image (Local)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./api
+          load: true # โหลดเก็บไว้ในเครื่องรันเพื่อรอให้ Trivy สแกนก่อน
+          tags: ${{ env.IMAGE_API }}:${{ github.sha }}
+
+      - name: Run Trivy Vulnerability Scanner (API)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.IMAGE_API }}:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1' # บังคับ Fail ถ้าเจอช่องโหว่ระดับ HIGH/CRITICAL
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      # --- ฝั่ง Worker ---
+      - name: Build Worker Image (Local)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./worker
+          load: true
+          tags: ${{ env.IMAGE_WORKER }}:${{ github.sha }}
+
+      - name: Run Trivy Vulnerability Scanner (Worker)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.IMAGE_WORKER }}:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      # --- Push ลง Registry --- (ทำเมื่อผ่านการสแกนแล้วเท่านั้น)
+      - name: Push Secure Images to GHCR
+        run: |
+          docker tag ${{ env.IMAGE_API }}:${{ github.sha }} ${{ env.IMAGE_API }}:latest
+          docker push ${{ env.IMAGE_API }}:${{ github.sha }}
+          docker push ${{ env.IMAGE_API }}:latest
+          
+          docker tag ${{ env.IMAGE_WORKER }}:${{ github.sha }} ${{ env.IMAGE_WORKER }}:latest
+          docker push ${{ env.IMAGE_WORKER }}:${{ github.sha }}
+          docker push ${{ env.IMAGE_WORKER }}:latest
+
+  # ─── STAGE 4: Deploy ───────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to Kubernetes
+    needs: build-and-scan
+    runs-on: ubuntu-latest
+    # การผูก Job นี้เข้ากับ Environment ใน GitHub เพื่อใช้ฟีเจอร์ Reviewer (เฉพาะ PROD)
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env || 'dev' }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Determine Target Namespace
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "NAMESPACE=${{ github.event.inputs.target_env }}" >> $GITHUB_ENV
+          else
+            echo "NAMESPACE=dev" >> $GITHUB_ENV
+          fi
+
+      - name: Set up Kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Set K8s Context
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+
+      - name: Deploy K8s Manifests
+        run: |
+          echo "Deploying to Namespace: ${{ env.NAMESPACE }}"
+          
+          kubectl apply -f k8s/${{ env.NAMESPACE }}/configmap.yaml -n ${{ env.NAMESPACE }}
+          kubectl apply -f k8s/${{ env.NAMESPACE }}/api_service.yaml -n ${{ env.NAMESPACE }}
+          kubectl apply -f k8s/${{ env.NAMESPACE }}/api_hpa.yaml -n ${{ env.NAMESPACE }}
+          kubectl apply -f k8s/${{ env.NAMESPACE }}/api_deployment.yaml -n ${{ env.NAMESPACE }}
+          kubectl apply -f k8s/${{ env.NAMESPACE }}/worker_deployment.yaml -n ${{ env.NAMESPACE }}
+          
+          kubectl set image deployment/api api=${{ env.IMAGE_API }}:${{ github.sha }} -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/worker worker=${{ env.IMAGE_WORKER }}:${{ github.sha }} -n ${{ env.NAMESPACE }}
+          
+      - name: Verify Rollout Status
+        run: |
+          kubectl rollout status deployment/api -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/worker -n ${{ env.NAMESPACE }}
+          echo "✅ Deployment Successful!"

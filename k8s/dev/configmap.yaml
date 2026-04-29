@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: dev
+data:
+  ENV: "dev"
+  LOG_LEVEL: "debug"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: worker-config
+  namespace: dev
+data:
+  ENV: "dev"
+  WORKER_INTERVAL: "60"
+  WORKER_MAX_FAILURES: "5"
+  LOG_LEVEL: "debug"
+  PYTHONUNBUFFERED: "1"
