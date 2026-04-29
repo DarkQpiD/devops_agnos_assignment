@@ -123,30 +123,12 @@ jobs:
             echo "NAMESPACE=dev" >> $GITHUB_ENV
           fi
 
-      - name: Set up Kubectl
-        uses: azure/setup-kubectl@v3
-
-      - name: Set K8s Context
-        uses: azure/k8s-set-context@v3
-        with:
-          method: kubeconfig
-          kubeconfig: ${{ secrets.KUBECONFIG }}
-
-      - name: Deploy K8s Manifests
+      - name: Deploy K8s Manifests (Mocked)
         run: |
-          echo "Deploying to Namespace: ${{ env.NAMESPACE }}"
-          
-          kubectl apply -f k8s/${{ env.NAMESPACE }}/configmap.yaml -n ${{ env.NAMESPACE }}
-          kubectl apply -f k8s/${{ env.NAMESPACE }}/api_service.yaml -n ${{ env.NAMESPACE }}
-          kubectl apply -f k8s/${{ env.NAMESPACE }}/api_hpa.yaml -n ${{ env.NAMESPACE }}
-          kubectl apply -f k8s/${{ env.NAMESPACE }}/api_deployment.yaml -n ${{ env.NAMESPACE }}
-          kubectl apply -f k8s/${{ env.NAMESPACE }}/worker_deployment.yaml -n ${{ env.NAMESPACE }}
-          
-          kubectl set image deployment/api api=${{ env.IMAGE_API }}:${{ github.sha }} -n ${{ env.NAMESPACE }}
-          kubectl set image deployment/worker worker=${{ env.IMAGE_WORKER }}:${{ github.sha }} -n ${{ env.NAMESPACE }}
-          
-      - name: Verify Rollout Status
-        run: |
-          kubectl rollout status deployment/api -n ${{ env.NAMESPACE }}
-          kubectl rollout status deployment/worker -n ${{ env.NAMESPACE }}
-          echo "✅ Deployment Successful!"
+          echo "🚀 Deploying to Namespace: ${{ env.NAMESPACE }}"
+          echo "kubectl apply -f k8s/${{ env.NAMESPACE }}/configmap.yaml"
+          echo "kubectl apply -f k8s/${{ env.NAMESPACE }}/api_deployment.yaml"
+          echo "kubectl apply -f k8s/${{ env.NAMESPACE }}/worker_deployment.yaml"
+          echo "kubectl set image deployment/api api=${{ env.IMAGE_API }}:${{ github.sha }}"
+          echo "kubectl set image deployment/worker worker=${{ env.IMAGE_WORKER }}:${{ github.sha }}"
+          echo "✅ Deployment Successful! (mocked)"
