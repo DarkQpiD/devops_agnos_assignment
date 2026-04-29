@@ -1,0 +1,8 @@
+# jaraco.context vendored inside setuptools - not directly exploitable
+CVE-2026-23949
+
+# wheel vendored inside setuptools - not directly exploitable  
+CVE-2026-24049
+
+# starlette DoS via Range header - low risk, no direct file upload endpoint
+CVE-2025-62727
