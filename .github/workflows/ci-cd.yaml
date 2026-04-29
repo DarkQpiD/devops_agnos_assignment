@@ -135,14 +135,12 @@ jobs:
         run: |
           echo "Deploying to Namespace: ${{ env.NAMESPACE }}"
           
-          # 1. รันไฟล์ K8s ทั้งหมดในโฟลเดอร์ของ Environment นั้นๆ
           kubectl apply -f k8s/${{ env.NAMESPACE }}/configmap.yaml -n ${{ env.NAMESPACE }}
           kubectl apply -f k8s/${{ env.NAMESPACE }}/api_service.yaml -n ${{ env.NAMESPACE }}
           kubectl apply -f k8s/${{ env.NAMESPACE }}/api_hpa.yaml -n ${{ env.NAMESPACE }}
           kubectl apply -f k8s/${{ env.NAMESPACE }}/api_deployment.yaml -n ${{ env.NAMESPACE }}
           kubectl apply -f k8s/${{ env.NAMESPACE }}/worker_deployment.yaml -n ${{ env.NAMESPACE }}
           
-          # 2. บังคับอัปเดต Image Tag เป็น Commit ปัจจุบันเพื่อกระตุ้น Rolling Update
           kubectl set image deployment/api api=${{ env.IMAGE_API }}:${{ github.sha }} -n ${{ env.NAMESPACE }}
           kubectl set image deployment/worker worker=${{ env.IMAGE_WORKER }}:${{ github.sha }} -n ${{ env.NAMESPACE }}
           
