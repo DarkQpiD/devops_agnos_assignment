@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import uvicorn
+from prometheus_fastapi_instrumentator import Instrumentator
 
 # ─── Structured JSON Logger ───────────────────────────────────────────────────
 
@@ -41,6 +42,8 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs" if os.getenv("ENV") != "production" else None,
 )
+
+Instrumentator().instrument(app).expose(app)
 
 
 @app.middleware("http")
