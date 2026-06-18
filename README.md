@@ -1,6 +1,6 @@
-# 🚀 Agnos DevOps Assignment
+# 🚀 DevOps Practice
 
-A production-ready DevOps setup featuring an API service and background Worker service, fully containerized and orchestrated with Kubernetes.
+A practical DevOps project demonstrating containerization and Kubernetes orchestration for an API and background Worker service.
 
 ---
 
